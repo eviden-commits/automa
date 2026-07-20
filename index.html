@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>스케쥴 관리 시스템 — Automail</title>
+    
+    <!-- 폰트 및 아이콘 CDN 로드 -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- SheetJS (Excel 파싱용) CDN 로드 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        :root {
+            /* Apple / McKinsey 프리미엄 테마 CSS 변수 */
+            --sys-bg: #F5F5F7;
+            --sys-surface: #FFFFFF;
+            --sys-surface-2: #F5F5F7;
+            --sys-label: #1D1D1F;
+            --sys-label-2: #3C3C43;
+            --sys-label-3: #6C6C70;
+            --sys-label-4: #AEAEB2;
+            --sys-separator: rgba(60, 60, 67, 0.12);
+            --sys-separator-2: rgba(60, 60, 67, 0.06);
+            --sys-blue: #007AFF;
+            --sys-blue-bg: rgba(0, 122, 255, 0.08);
+            --sys-green: #34C759;
+            --sys-green-bg: rgba(52, 199, 89, 0.10);
+            --sys-red: #FF3B30;
+            --sys-red-bg: rgba(255, 59, 48, 0.10);
+            --sys-orange: #FF9500;
+            --sys-orange-bg: rgba(255, 149, 0, 0.10);
+            --sys-purple: #AF52DE;
+            --sys-purple-bg: rgba(175, 82, 222, 0.10);
+            --sys-gray: #636366;
+            --sys-gray-bg: rgba(99, 99, 102, 0.10);
+            --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+            --r-xs: 6px;
+            --r-sm: 10px;
+            --r-md: 14px;
+            --r-lg: 18px;
+            --r-xl: 22px;
+            --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.04);
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.06), 0 16px 40px rgba(0, 0, 0, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--sys-bg);
+            color: var(--sys-label);
+            min-height: 100vh;
+            padding-bottom: 60px;
+            -webkit-font-smoothing: antialiased;
+            letter-spacing: -0.022em;
+        }
+
+        /* 1. 로딩 오버레이 */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: var(--sys-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 20px;
+            transition: opacity 0.3s ease;
+        }
+        #loading-overlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loader-wordmark {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--sys-label-4);
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+        }
+        .loader-track {
+            width: 160px;
+            height: 2px;
+            background: var(--sys-separator);
+            border-radius: 1px;
+            overflow: hidden;
+        }
+        .loader-track::after {
+            content: '';
+            display: block;
+            height: 100%;
+            width: 40%;
+            background: var(--sys-label-2);
+            animation: slide 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+        }
+        @keyframes slide {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(200%); }
+        }
+
+        /* 2. 로그인 및 초기 비밀번호 세팅 화면 */
+        #login-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9998;
+            background: var(--sys-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: var(--sys-surface);
+            border-radius: var(--r-xl);
+            box-shadow: var(--shadow-lg);
+            width: 100%;
+            max-width: 360px;
+            padding: 40px 32px;
+            text-align: center;
+            border: 1px solid var(--sys-separator-2);
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .login-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: var(--sys-label);
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            margin-bottom: 20px;
+        }
+        .login-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--sys-label);
+            margin-bottom: 8px;
+        }
+        .login-subtitle {
+            font-size: 13px;
+            color: var(--sys-label-3);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+        .login-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1.5px solid var(--sys-separator);
+            border-radius: var(--r-md);
+            font-size: 15px;
+            text-align: center;
+            letter-spacing: 0.05em;
+            outline: none;
+            background: var(--sys-surface-2);
+            margin-bottom: 16px;
+            transition: all 0.2s;
+        }
+        .login-input:focus {
+            border-color: var(--sys-blue);
+            background: var(--sys-surface);
+            box-shadow: 0 0 0 4px var(--sys-blue-bg);
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 14px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: var(--r-md);
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--sys-label);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: rgba(29, 29, 31, 0.88);
+        }
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+        .btn-secondary {
+            background: var(--sys-surface);
+            color: var(--sys-label);
+            border: 1px solid var(--sys-separator);
+        }
+        .btn-secondary:hover {
+            background: var(--sys-surface-2);
+        }
+        .login-error {
+            font-size: 12px;
+            color: var(--sys-red);
+            margin-top: 12px;
+            min-height: 18px;
+        }
+
+        /* 3. 대시보드 레이아웃 */
+        .top-nav {
+            position: sticky;
+            top: 0;
+            z-index: 900;
+            height: 56px;
+            background: rgba(245, 245, 247, 0.85);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-bottom: 0.5px solid var(--sys-separator);
+            padding: 0 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .nav-brand-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            background: var(--sys-label);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        .nav-center {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .nav-status {
+            font-size: 12px;
+            color: var(--sys-label-3);
+            background: rgba(0, 0, 0, 0.04);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-family: var(--font-mono);
+        }
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--sys-label-2);
+            transition: all 0.15s;
+        }
+        .icon-btn:hover {
+            background: rgba(0,0,0,0.06);
+            color: var(--sys-label);
+        }
+
+        /* 메인 컨테이너 */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px;
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 32px;
+        }
+        
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 16px;
+                gap: 24px;
+            }
+            .top-nav {
+                padding: 0 16px;
+            }
+        }
+
+        /* 폼 카드 및 리스트 카드 공통 */
+        .card {
+            background: var(--sys-surface);
+            border-radius: var(--r-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--sys-separator-2);
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--sys-label);
+        }
+
+        /* 입력 폼 필드 스타일 */
+        .form-group {
+            margin-bottom: 18px;
+        }
+        .form-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--sys-label-3);
+            margin-bottom: 6px;
+        }
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--sys-separator);
+            border-radius: var(--r-sm);
+            font-size: 14px;
+            color: var(--sys-label);
+            background: var(--sys-surface-2);
+            outline: none;
+            transition: border-color 0.2s, background-color 0.2s;
+            font-family: inherit;
+        }
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            border-color: var(--sys-blue);
+            background: var(--sys-surface);
+        }
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* 수신자 멀티 선택 박스 */
+        .recipient-selector {
+            border: 1px solid var(--sys-separator);
+            border-radius: var(--r-sm);
+            background: var(--sys-surface-2);
+            max-height: 150px;
+            overflow-y: auto;
+            padding: 8px 12px;
+        }
+        .recipient-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            padding: 6px 0;
+            border-bottom: 0.5px solid var(--sys-separator-2);
+            cursor: pointer;
+        }
+        .recipient-item:last-child {
+            border-bottom: none;
+        }
+        .recipient-item input[type="checkbox"] {
+            cursor: pointer;
+            width: 15px;
+            height: 15px;
+        }
+        .recipient-item-meta {
+            font-size: 11px;
+            color: var(--sys-label-3);
+            margin-left: auto;
+        }
+
+        /* 주기 선택형 조건부 노출 */
+        .conditional-field {
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 토글 스위치 */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--sys-surface-2);
+            padding: 10px 14px;
+            border-radius: var(--r-sm);
+            border: 1px solid var(--sys-separator);
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: var(--sys-label-4);
+            transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s cubic-bezier(0.16, 1, 0.3, 1);
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        input:checked + .slider {
+            background-color: var(--sys-green);
+        }
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        /* 4. 리마인더 목록 영역 */
+        .list-section-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--sys-label-3);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 28px 0 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .list-section-title:first-child {
+            margin-top: 0;
+        }
+        
+        .reminder-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .reminder-card {
+            background: var(--sys-surface);
+            border-radius: var(--r-md);
+            padding: 18px 20px;
+            border: 1px solid var(--sys-separator-2);
+            box-shadow: var(--shadow-xs);
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .reminder-card:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+        .reminder-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            gap: 12px;
+        }
+        .reminder-card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--sys-label);
+            line-height: 1.3;
+        }
+        .reminder-card-body {
+            font-size: 13px;
+            color: var(--sys-label-2);
+            line-height: 1.5;
+            white-space: pre-wrap;
+            margin-bottom: 12px;
+            background: var(--sys-surface-2);
+            padding: 10px 14px;
+            border-radius: var(--r-xs);
+            border: 0.5px solid var(--sys-separator-2);
+        }
+        .reminder-card-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 12px;
+            font-size: 11px;
+            color: var(--sys-label-3);
+            border-top: 0.5px solid var(--sys-separator-2);
+            padding-top: 8px;
+        }
+        .meta-tag {
+            background: var(--sys-blue-bg);
+            color: var(--sys-blue);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .meta-tag.loop {
+            background: var(--sys-purple-bg);
+            color: var(--sys-purple);
+        }
+        .meta-tag.single {
+            background: var(--sys-gray-bg);
+            color: var(--sys-gray);
+        }
+        
+        /* 버튼 그룹 */
+        .reminder-actions {
+            display: flex;
+            gap: 6px;
+            justify-content: flex-end;
+            margin-top: 12px;
+        }
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 11.5px;
+            font-weight: 600;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: background 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-small-edit {
+            background: var(--sys-blue-bg);
+            color: var(--sys-blue);
+        }
+        .btn-small-edit:hover {
+            background: var(--sys-blue);
+            color: white;
+        }
+        .btn-small-suspend {
+            background: var(--sys-orange-bg);
+            color: var(--sys-orange);
+        }
+        .btn-small-suspend:hover {
+            background: var(--sys-orange);
+            color: white;
+        }
+        .btn-small-activate {
+            background: var(--sys-green-bg);
+            color: var(--sys-green);
+        }
+        .btn-small-activate:hover {
+            background: var(--sys-green);
+            color: white;
+        }
+        .btn-small-delete {
+            background: var(--sys-red-bg);
+            color: var(--sys-red);
+        }
+        .btn-small-delete:hover {
+            background: var(--sys-red);
+            color: white;
+        }
+        
+        .empty-placeholder {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--sys-label-4);
+            font-size: 13px;
+            background: var(--sys-surface);
+            border-radius: var(--r-md);
+            border: 1px dashed var(--sys-separator);
+        }
+
+        /* 5. 모달 공통 스타일 */
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+            animation: fadeIn 0.2s ease;
+        }
+        .modal-content {
+            background: var(--sys-surface);
+            border-radius: var(--r-xl);
+            box-shadow: var(--shadow-lg);
+            width: 100%;
+            max-width: 600px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--sys-separator);
+            overflow: hidden;
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 0.5px solid var(--sys-separator);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-title {
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 0.5px solid var(--sys-separator);
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            background: var(--sys-bg);
+        }
+
+        /* 모달 상단 비밀번호 고정 입력창 */
+        .modal-password-bar {
+            background: var(--sys-orange-bg);
+            border-bottom: 1.5px solid var(--sys-orange);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .modal-password-bar label {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--sys-orange);
+            white-space: nowrap;
+        }
+        .modal-password-input {
+            flex: 1;
+            max-width: 200px;
+            padding: 6px 10px;
+            border: 1px solid var(--sys-orange);
+            border-radius: var(--r-xs);
+            font-size: 13px;
+            outline: none;
+            text-align: center;
+        }
+
+        /* 엑셀 파일 업로드 구역 */
+        .upload-zone {
+            border: 2px dashed var(--sys-separator);
+            border-radius: var(--r-md);
+            padding: 30px;
+            text-align: center;
+            background: var(--sys-surface-2);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--sys-blue);
+            background: var(--sys-blue-bg);
+        }
+        .upload-zone i {
+            font-size: 28px;
+            color: var(--sys-label-3);
+            margin-bottom: 10px;
+        }
+        .upload-zone p {
+            font-size: 13px;
+            color: var(--sys-label-2);
+        }
+        .upload-zone input[type="file"] {
+            display: none;
+        }
+
+        /* 수신자 테이블 및 관리 */
+        .recipient-table-container {
+            border: 1px solid var(--sys-separator);
+            border-radius: var(--r-md);
+            overflow: hidden;
+            background: var(--sys-surface);
+            max-height: 250px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+        .recipient-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .recipient-table th, .recipient-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 0.5px solid var(--sys-separator-2);
+        }
+        .recipient-table th {
+            background: var(--sys-surface-2);
+            font-weight: 600;
+            color: var(--sys-label-2);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .recipient-table tr:last-child td {
+            border-bottom: none;
+        }
+        .recipient-table tr:hover td {
+            background: rgba(0, 0, 0, 0.02);
+        }
+        .recipient-table input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+        }
+
+        /* 상태 뱃지 */
+        .status-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .status-active { background: var(--sys-green-bg); color: var(--sys-green); }
+        .status-suspended { background: var(--sys-orange-bg); color: var(--sys-orange); }
+        .status-done { background: var(--sys-blue-bg); color: var(--sys-blue); }
+    </style>
+</head>
+<body>
+
+    <!-- 1. 로딩 오버레이 -->
+    <div id="loading-overlay">
+        <div class="loader-wordmark">Automail System</div>
+        <div class="loader-track"></div>
+    </div>
+
+    <!-- 2. 로그인 오버레이 (비밀번호 검증) -->
+    <div id="login-overlay" style="display: none;">
+        <div class="login-card">
+            <div class="login-icon"><i class="fa-solid fa-lock"></i></div>
+            <h1 class="login-title" id="login-title">Automail System</h1>
+            <p class="login-subtitle" id="login-subtitle">스케쥴 관리 리마인더 접속 비밀번호를 입력하세요.</p>
+            <input type="password" id="login-password" class="login-input" placeholder="비밀번호 입력">
+            <button id="btn-login" class="btn btn-primary">시스템 접속 <i class="fa-solid fa-chevron-right"></i></button>
+            <div class="login-error" id="login-error"></div>
+        </div>
+    </div>
+
+    <!-- 3. 대시보드 화면 -->
+    <header class="top-nav">
+        <div class="nav-brand" onclick="location.reload()">
+            <div class="nav-brand-icon"><i class="fa-solid fa-paper-plane"></i></div>
+            <span>Automail</span>
+        </div>
+        <div class="nav-center">
+            <div class="nav-status" id="nav-status">동기화 대기 중...</div>
+        </div>
+        <div class="nav-right">
+            <button class="btn btn-secondary" id="btn-open-recipients" style="width: auto; padding: 8px 14px; font-size: 13px;">
+                <i class="fa-solid fa-users"></i> 수신자 관리
+            </button>
+            <a href="#" id="btn-db-url" target="_blank" rel="noopener" class="icon-btn" title="스프레드시트 DB 열기">
+                <i class="fa-solid fa-database"></i>
+            </a>
+            <button class="icon-btn" id="btn-logout" title="로그아웃">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- 3-1. 왼쪽: 리마인더 등록 및 편집 폼 -->
+        <section class="card" style="height: fit-content; position: sticky; top: 88px;">
+            <div class="card-title">
+                <span id="form-card-title"><i class="fa-solid fa-calendar-plus"></i> 새 리마인더 등록</span>
+                <button class="btn-small btn-small-delete" id="btn-cancel-edit" style="display: none;">수정 취소</button>
+            </div>
+            
+            <form id="reminder-form" onsubmit="event.preventDefault();">
+                <input type="hidden" id="edit-reminder-id">
+                
+                <div class="form-group">
+                    <label class="form-label" for="rem-title">제목</label>
+                    <input type="text" id="rem-title" class="form-input" placeholder="리마인더 제목" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="rem-content">내용</label>
+                    <textarea id="rem-content" class="form-textarea" placeholder="메일 본문 내용 (줄바꿈 가능)"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">발송 대상 (수신자 목록에서 멀티 선택)</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                        <button type="button" class="btn-small btn-small-edit" onclick="toggleAllRecipients(true)" style="padding: 4px 8px; font-size: 10px;">전체 선택</button>
+                        <button type="button" class="btn-small btn-small-suspend" onclick="toggleAllRecipients(false)" style="padding: 4px 8px; font-size: 10px;">전체 해제</button>
+                    </div>
+                    <div class="recipient-selector" id="recipient-checklist">
+                        <div class="empty-placeholder" style="padding: 12px; font-size: 11px;">수신자를 먼저 등록하세요.</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="rem-interval">발송 주기</label>
+                    <select id="rem-interval" class="form-select" onchange="handleIntervalChange()">
+                        <option value="daily">매일 (Daily)</option>
+                        <option value="weekly">주간 (Weekly - 특정 요일)</option>
+                        <option value="biweekly">격주 (Biweekly - 격주 요일)</option>
+                        <option value="month_start">월초 (매월 1일)</option>
+                        <option value="month_end">월말 (매월 마지막 날)</option>
+                        <option value="custom">직접 지정 (커스텀 날짜)</option>
+                    </select>
+                </div>
+
+                <!-- 조건부 입력 필드: 요일 선택 (주간, 격주) -->
+                <div class="form-group conditional-field" id="field-weekly-day">
+                    <label class="form-label" for="rem-weekly-day">발송 요일 선택</label>
+                    <select id="rem-weekly-day" class="form-select">
+                        <option value="1">월요일 (MON)</option>
+                        <option value="2">화요일 (TUE)</option>
+                        <option value="3">수요일 (WED)</option>
+                        <option value="4">목요일 (THU)</option>
+                        <option value="5">금요일 (FRI)</option>
+                        <option value="6">토요일 (SAT)</option>
+                        <option value="7">일요일 (SUN)</option>
+                    </select>
+                </div>
+
+                <!-- 조건부 입력 필드: 날짜 선택 (커스텀 지정) -->
+                <div class="form-group conditional-field" id="field-custom-date">
+                    <label class="form-label" for="rem-custom-date">발송일 지정</label>
+                    <input type="date" id="rem-custom-date" class="form-input">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="rem-hour">발송 시각 (구글 서버 KST 기준)</label>
+                    <select id="rem-hour" class="form-select">
+                        <!-- 0시부터 23시 생성 -->
+                        <script>
+                            for(let i=0; i<24; i++) {
+                                document.write(`<option value="${i}">${i}시</option>`);
+                            }
+                        </script>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <div class="toggle-container">
+                        <span class="form-label" style="margin-bottom:0;">주기 반복 여부 (Loop)</span>
+                        <label class="switch">
+                            <input type="checkbox" id="rem-is-loop" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-submit-reminder" class="btn btn-primary">
+                    <i class="fa-solid fa-floppy-disk"></i> 리마인더 저장
+                </button>
+            </form>
+        </section>
+
+        <!-- 3-2. 오른쪽: 리마인더 리스트 표시 -->
+        <section style="display: flex; flex-direction: column; gap: 24px;">
+            <!-- 활성 리마인더 영역 -->
+            <div>
+                <h3 class="list-section-title"><i class="fa-solid fa-play" style="color:var(--sys-green);"></i> 진행 중인 사항 (활성 리마인더)</h3>
+                <div class="reminder-list" id="active-reminder-list">
+                    <div class="empty-placeholder">등록된 진행 중인 리마인더가 없습니다.</div>
+                </div>
+            </div>
+
+            <!-- 완료/종료된 리마인더 영역 -->
+            <div>
+                <h3 class="list-section-title"><i class="fa-solid fa-box-archive" style="color:var(--sys-label-3);"></i> 완료 및 종료된 사항</h3>
+                <div class="reminder-list" id="finished-reminder-list">
+                    <div class="empty-placeholder">보관된 리마인더가 없습니다.</div>
+                </div>
+            </div>
+
+            <!-- 테스트 및 배치 제어 영역 -->
+            <div class="card" style="padding: 16px 20px; background: rgba(0,0,0,0.02); border: 1px dashed var(--sys-separator);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div style="font-size: 12.5px; color: var(--sys-label-2);">
+                        <strong><i class="fa-solid fa-gears"></i> 시스템 관리 도구</strong>: 시간 배치를 수동 테스트하거나 GAS 트리거를 재설치합니다.
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn-small btn-small-edit" onclick="triggerManualRun()" style="padding: 6px 12px;">배치 수동 실행</button>
+                        <button type="button" class="btn-small btn-small-suspend" onclick="installTrigger()" style="padding: 6px 12px;">배치 트리거 재설치</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 4. 수신자(이메일 주소록) 관리 모달 -->
+    <div class="modal" id="recipients-modal">
+        <div class="modal-content">
+            <!-- 삭제/추가 시 비밀번호 검증용 상단 비밀번호 창 -->
+            <div class="modal-password-bar">
+                <label for="modal-action-password"><i class="fa-solid fa-shield-halved"></i> 변경 인증 비밀번호:</label>
+                <input type="password" id="modal-action-password" class="modal-password-input" placeholder="관리자 비밀번호 재입력">
+            </div>
+
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fa-solid fa-address-book"></i> 수신자 이메일 주소록 관리</h3>
+                <button class="icon-btn" onclick="closeRecipientsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- 엑셀 일괄 등록 구역 -->
+                <div class="upload-zone" onclick="document.getElementById('xlsx-input').click()" id="xlsx-upload-zone">
+                    <i class="fa-solid fa-file-excel"></i>
+                    <p>엑셀 파일(xlsx)을 이 구역에 드래그하거나 클릭하여 업로드하세요.</p>
+                    <span style="font-size:11px; color:var(--sys-label-3);">A1: 성함, B1: 이메일주소, C1: 비고(현장명)</span>
+                    <input type="file" id="xlsx-input" accept=".xlsx" onchange="handleXlsxUpload(event)">
+                </div>
+
+                <!-- 선택 삭제 컨트롤바 -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-size:12px; font-weight:600; color:var(--sys-label-2);">
+                        등록된 수신자 목록
+                    </div>
+                    <button class="btn-small btn-small-delete" onclick="deleteSelectedRecipients()">
+                        <i class="fa-solid fa-trash-can"></i> 선택 삭제
+                    </button>
+                </div>
+
+                <!-- 수신자 목록 테이블 -->
+                <div class="recipient-table-container">
+                    <table class="recipient-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px; text-align: center;">
+                                    <input type="checkbox" id="chk-all-recipients" onchange="toggleSelectAllRecipients(this.checked)">
+                                </th>
+                                <th>성함</th>
+                                <th>이메일 주소</th>
+                                <th>비고 (현장명)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recipient-table-body">
+                            <tr>
+                                <td colspan="4" style="text-align: center; color: var(--sys-label-4); padding: 40px;">등록된 수신자가 없습니다.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 수동 추가 폼 -->
+                <div style="background: var(--sys-surface-2); border-radius: var(--r-md); padding: 16px; border: 0.5px solid var(--sys-separator);">
+                    <div style="font-size: 13px; font-weight: 700; margin-bottom: 12px; color: var(--sys-label);">
+                        <i class="fa-solid fa-user-plus"></i> 수신자 수동 개별 추가
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 8px; margin-bottom: 12px;">
+                        <input type="text" id="manual-name" class="form-input" placeholder="성함" style="background:var(--sys-surface);">
+                        <input type="email" id="manual-email" class="form-input" placeholder="이메일 주소" style="background:var(--sys-surface);">
+                        <input type="text" id="manual-memo" class="form-input" placeholder="비고(현장명)" style="background:var(--sys-surface);">
+                    </div>
+                    <button class="btn btn-primary" onclick="addSingleRecipient()" style="padding: 10px 14px; font-size: 13px;">
+                        수신자 추가
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeRecipientsModal()" style="width: auto; padding: 10px 20px;">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스크립트 비즈니스 로직 연동 -->
+    <script>
+        // 배포한 Google Apps Script Web App URL을 여기에 입력하세요.
+        // 예: "https://script.google.com/macros/s/.../exec"
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbyb63305jxFOAlkf4ghjlFSy_9rFu7whw7AjFIuuUmdX0Jd_muu23jC4V0R82K6jX_JxQ/exec"; 
+
+        let appData = {
+            activeReminders: [],
+            finishedReminders: [],
+            recipients: [],
+            spreadsheetUrl: "#",
+            isFirstSetup: false
+        };
+
+        // 페이지 초기 로드
+        window.addEventListener('DOMContentLoaded', async () => {
+            initXlsxDragAndDrop();
+            
+            // 1. 우선 GET 요청으로 최초 세팅(비밀번호 미등록) 상태 체크
+            try {
+                const checkRes = await fetch(GAS_URL);
+                const checkData = await checkRes.json();
+                
+                document.getElementById('loading-overlay').classList.add('fade-out');
+                
+                if (checkData.isFirstSetup) {
+                    appData.isFirstSetup = true;
+                    showFirstSetupScreen();
+                    return;
+                }
+            } catch (e) {
+                console.error("최초 실행 상태 체크 실패, 로그인 오버레이 노출: ", e);
+                document.getElementById('loading-overlay').classList.add('fade-out');
+            }
+
+            // LocalStorage에서 저장된 마스터 비밀번호 로드 시도
+            const savedPwd = localStorage.getItem('automail_master_password');
+            if (savedPwd) {
+                document.getElementById('login-password').value = savedPwd;
+                document.getElementById('modal-action-password').value = savedPwd;
+                const ok = await loadData();
+                if (ok) {
+                    return; // 로그인 완료
+                }
+            }
+            
+            // 로그인되어 있지 않거나 실패했으면 로그인 창 강제 노출
+            showLoginScreen();
+        });
+
+        // 엑셀 드래그 앤 드롭 초기화
+        function initXlsxDragAndDrop() {
+            const zone = document.getElementById('xlsx-upload-zone');
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                zone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    zone.classList.add('dragover');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                zone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    zone.classList.remove('dragover');
+                }, false);
+            });
+
+            zone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length) {
+                    document.getElementById('xlsx-input').files = files;
+                    handleXlsxUpload({ target: { files: files } });
+                }
+            }, false);
+        }
+
+        // 로그인 화면 연출
+        function showLoginScreen() {
+            document.getElementById('login-overlay').style.display = 'flex';
+            document.getElementById('login-title').textContent = 'Automail 로그인';
+            document.getElementById('login-subtitle').textContent = '스케쥴 관리 시스템 접속을 위해 마스터 비밀번호를 입력해 주십시오.';
+        }
+
+        // 최초 설정 화면 연출
+        function showFirstSetupScreen() {
+            document.getElementById('login-overlay').style.display = 'flex';
+            document.getElementById('login-title').textContent = 'Automail 최초 설정';
+            document.getElementById('login-subtitle').innerHTML = '<span style="color:var(--sys-orange); font-weight:700;">시스템이 처음 실행되었습니다.</span><br>앞으로 사용할 마스터 비밀번호를 새로 등록하세요.';
+            document.getElementById('login-password').placeholder = '신규 비밀번호 등록';
+            document.getElementById('btn-login').innerHTML = '비밀번호 등록 및 접속 <i class="fa-solid fa-user-shield"></i>';
+        }
+
+        // 로그인 / 최초 비밀번호 설정 처리 버튼 이벤트
+        document.getElementById('btn-login').addEventListener('click', async () => {
+            const pwd = document.getElementById('login-password').value.trim();
+            const errEl = document.getElementById('login-error');
+            errEl.textContent = '';
+
+            if (!pwd) {
+                errEl.textContent = '비밀번호를 입력해주세요.';
+                return;
+            }
+
+            if (appData.isFirstSetup) {
+                // 최초 설정 POST API 호출
+                const res = await callRawApi('setAdminPassword', { newPassword: pwd });
+                if (res && res.status === 'ok') {
+                    localStorage.setItem('automail_master_password', pwd);
+                    document.getElementById('modal-action-password').value = pwd;
+                    appData.isFirstSetup = false;
+                    alert('마스터 비밀번호 설정이 완료되었습니다.');
+                    location.reload();
+                } else {
+                    errEl.textContent = res ? res.message : '네트워크 통신 오류가 발생했습니다.';
+                }
+            } else {
+                // 일반 로그인 (데이터 로딩을 통해 패스워드가 올바른지 자동 검증)
+                localStorage.setItem('automail_master_password', pwd);
+                document.getElementById('modal-action-password').value = pwd;
+                
+                document.getElementById('btn-login').disabled = true;
+                document.getElementById('btn-login').textContent = '인증 확인 중...';
+                
+                const ok = await loadData();
+                
+                document.getElementById('btn-login').disabled = false;
+                document.getElementById('btn-login').innerHTML = '시스템 접속 <i class="fa-solid fa-chevron-right"></i>';
+
+                if (ok) {
+                    document.getElementById('login-overlay').style.display = 'none';
+                } else {
+                    localStorage.removeItem('automail_master_password');
+                    document.getElementById('modal-action-password').value = '';
+                    errEl.textContent = '비밀번호가 틀렸습니다. 다시 확인해 주세요.';
+                }
+            }
+        });
+
+        // 엔터키 로그인 지원
+        document.getElementById('login-password').addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('btn-login').click();
+            }
+        });
+
+        // 로그아웃
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            if (confirm('시스템 로그아웃 하시겠습니까?')) {
+                localStorage.removeItem('automail_master_password');
+                location.reload();
+            }
+        });
+
+        // API 연동용 로우 헬퍼 (CORS 우회를 방지하기 위해 POST 요청만 지원)
+        async function callRawApi(action, payload = {}) {
+            // LocalStorage 또는 모달에 입력되어 있는 비밀번호 사용
+            let pwd = localStorage.getItem('automail_master_password') || '';
+            
+            // 수신자 모달 창이 열려있는 경우, 모달 상단의 변경인증 비밀번호 값을 우선적으로 전달
+            if (document.getElementById('recipients-modal').style.display === 'flex') {
+                pwd = document.getElementById('modal-action-password').value.trim() || pwd;
+            }
+
+            const bodyObj = {
+                action: action,
+                password: pwd,
+                ...payload
+            };
+
+            try {
+                // CORS 프리플라이트 차단을 예방하기 위해 Content-Type 헤더를 명시하지 않고 원시 body로 전송합니다.
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(bodyObj)
+                });
+                return await response.json();
+            } catch (e) {
+                console.error("API Call failed: ", e);
+                // 네트워크 에러 등이 났을 때, GAS 특유의 CORS 리디렉션 응답을 고려하여
+                // status가 JSON에 담기지 않는 경우가 있을 수 있습니다.
+                return { status: "network_error", message: e.toString() };
+            }
+        }
+
+        // 전체 데이터 동기화
+        async function loadData() {
+            setNavStatus('데이터 동기화 중...');
+            const res = await callRawApi('loadData');
+            
+            if (res && res.status === 'ok') {
+                appData.activeReminders = res.activeReminders || [];
+                appData.finishedReminders = res.finishedReminders || [];
+                appData.recipients = res.recipients || [];
+                appData.spreadsheetUrl = res.spreadsheetUrl || '#';
+                
+                document.getElementById('btn-db-url').href = appData.spreadsheetUrl;
+                
+                // UI 렌더링
+                renderRecipientChecklist();
+                renderRecipientTable();
+                renderReminderList();
+                
+                setNavStatus(`동기화 완료: ${res.lastSync}`);
+                return true;
+            } else if (res && res.status === 'auth_error') {
+                setNavStatus('인증 실패');
+                return false;
+            } else {
+                setNavStatus('네트워크 연결 끊김');
+                return false;
+            }
+        }
+
+        function setNavStatus(text) {
+            document.getElementById('nav-status').textContent = text;
+        }
+
+        // 리마인더 주기 선택 시 조건부 입력창 처리
+        function handleIntervalChange() {
+            const interval = document.getElementById('rem-interval').value;
+            
+            const fieldWeeklyDay = document.getElementById('field-weekly-day');
+            const fieldCustomDate = document.getElementById('field-custom-date');
+            
+            // 일단 전부 초기화
+            fieldWeeklyDay.style.display = 'none';
+            fieldCustomDate.style.display = 'none';
+            
+            if (interval === 'weekly' || interval === 'biweekly') {
+                fieldWeeklyDay.style.display = 'block';
+            } else if (interval === 'custom') {
+                fieldCustomDate.style.display = 'block';
+            }
+        }
+
+        // 수신자 멀티 선택용 체크리스트 박스 렌더링
+        function renderRecipientChecklist() {
+            const container = document.getElementById('recipient-checklist');
+            if (appData.recipients.length === 0) {
+                container.innerHTML = '<div class="empty-placeholder" style="padding:12px; font-size:11px;">등록된 수신자가 없습니다. 수신자 관리에서 추가해주세요.</div>';
+                return;
+            }
+
+            container.innerHTML = appData.recipients.map(r => `
+                <label class="recipient-item">
+                    <input type="checkbox" name="reminder-recipients-chk" value="${escapeHtml(r.email)}">
+                    <strong>${escapeHtml(r.name)}</strong>
+                    <span style="color:var(--sys-label-3); font-size:12px;">(${escapeHtml(r.email)})</span>
+                    ${r.memo ? `<span class="recipient-item-meta">${escapeHtml(r.memo)}</span>` : ''}
+                </label>
+            `).join('');
+        }
+
+        // 전체선택 / 해제 헬퍼
+        function toggleAllRecipients(checked) {
+            const chks = document.getElementsByName('reminder-recipients-chk');
+            chks.forEach(chk => chk.checked = checked);
+        }
+
+        // 수신자 관리 팝업 내 테이블 렌더링
+        function renderRecipientTable() {
+            const tbody = document.getElementById('recipient-table-body');
+            document.getElementById('chk-all-recipients').checked = false;
+            
+            if (appData.recipients.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--sys-label-4); padding: 40px;">등록된 수신자가 없습니다. 수동 추가 또는 엑셀 업로드로 수신자를 추가하세요.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = appData.recipients.map(r => `
+                <tr>
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="recipient-row-chk" value="${escapeHtml(r.email)}">
+                    </td>
+                    <td style="font-weight:700;">${escapeHtml(r.name)}</td>
+                    <td style="font-family:var(--font-mono);">${escapeHtml(r.email)}</td>
+                    <td>${escapeHtml(r.memo || '—')}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 수신자 모달 헤더 체크박스 토글
+        function toggleSelectAllRecipients(checked) {
+            const chks = document.querySelectorAll('.recipient-row-chk');
+            chks.forEach(chk => chk.checked = checked);
+        }
+
+        // 리마인더 목록 렌더링 (진행 / 완료 분리)
+        function renderReminderList() {
+            const activeContainer = document.getElementById('active-reminder-list');
+            const finishedContainer = document.getElementById('finished-reminder-list');
+            
+            // 1. 활성 리마인더
+            if (appData.activeReminders.length === 0) {
+                activeContainer.innerHTML = '<div class="empty-placeholder">등록된 진행 중인 리마인더가 없습니다.</div>';
+            } else {
+                activeContainer.innerHTML = appData.activeReminders.map(r => renderReminderCard(r)).join('');
+            }
+
+            // 2. 완료/종료된 리마인더
+            if (appData.finishedReminders.length === 0) {
+                finishedContainer.innerHTML = '<div class="empty-placeholder">보관된 리마인더가 없습니다.</div>';
+            } else {
+                finishedContainer.innerHTML = appData.finishedReminders.map(r => renderReminderCard(r)).join('');
+            }
+        }
+
+        // 리마인더 카드 HTML 템플릿 생성
+        function renderReminderCard(r) {
+            const intervalNames = {
+                'daily': '매일', 'weekly': '매주', 'biweekly': '격주',
+                'month_start': '월초(1일)', 'month_end': '월말', 'custom': '지정일'
+            };
+            const days = ['', '월', '화', '수', '목', '금', '토', '일'];
+            let intervalDetail = intervalNames[r.interval] || r.interval;
+            
+            if (r.interval === 'weekly' || r.interval === 'biweekly') {
+                intervalDetail += ` (${days[r.weeklyDay]}요일)`;
+            } else if (r.interval === 'custom') {
+                intervalDetail += ` (${r.customDate})`;
+            }
+
+            const isFinished = r.status !== 'active';
+            const badgeClass = r.status === 'active' ? 'status-active' : (r.status === 'done' ? 'status-done' : 'status-suspended');
+            const badgeLabel = r.status === 'active' ? '활성' : (r.status === 'done' ? '완료' : '강제종료');
+
+            return `
+                <div class="reminder-card" id="reminder-card-${r.id}">
+                    <div class="reminder-card-header">
+                        <span class="status-badge ${badgeClass}">${badgeLabel}</span>
+                        <div class="reminder-card-title">${escapeHtml(r.title)}</div>
+                        <div style="font-size: 11px; font-weight: 500; font-family: var(--font-mono); color:var(--sys-label-4); margin-left:auto;">${r.hour}시 발송</div>
+                    </div>
+                    <div class="reminder-card-body">${escapeHtml(r.content || '(본문 내용 없음)')}</div>
+                    
+                    <div style="font-size:12px; margin-bottom:10px; color:var(--sys-label-2);">
+                        <i class="fa-solid fa-paper-plane" style="color:var(--sys-blue); margin-right:4px;"></i> 
+                        <strong>수신처 (${r.recipients.length}명)</strong>: 
+                        <span style="font-size:11.5px; color:var(--sys-label-3);">${escapeHtml(r.recipients.join(', '))}</span>
+                    </div>
+
+                    <div class="reminder-card-meta">
+                        <div><i class="fa-solid fa-arrows-spin"></i> 주기: <span style="font-weight:600; color:var(--sys-label);">${intervalDetail}</span></div>
+                        <div><i class="fa-solid fa-repeat"></i> 반복: <span class="meta-tag ${r.isLoop ? 'loop' : 'single'}">${r.isLoop ? '반복 발송' : '1회성 발송'}</span></div>
+                        ${r.lastSentAt ? `<div><i class="fa-solid fa-clock"></i> 최근 발송: <span>${r.lastSentAt}</span></div>` : ''}
+                    </div>
+
+                    <div class="reminder-actions">
+                        ${!isFinished ? `
+                            <button class="btn-small btn-small-edit" onclick="editReminder('${r.id}')"><i class="fa-solid fa-pen"></i> 수정</button>
+                            <button class="btn-small btn-small-suspend" onclick="toggleSuspend('${r.id}')"><i class="fa-solid fa-circle-stop"></i> 강제 종료</button>
+                        ` : `
+                            <button class="btn-small btn-small-activate" onclick="toggleSuspend('${r.id}')"><i class="fa-solid fa-rotate-left"></i> 재활성화</button>
+                        `}
+                        <button class="btn-small btn-small-delete" onclick="deleteReminder('${r.id}')"><i class="fa-solid fa-trash"></i> 삭제</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 리마인더 등록 및 수정 저장
+        document.getElementById('reminder-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const title = document.getElementById('rem-title').value.trim();
+            const content = document.getElementById('rem-content').value.trim();
+            const interval = document.getElementById('rem-interval').value;
+            const weeklyDay = document.getElementById('rem-weekly-day').value;
+            const customDate = document.getElementById('rem-custom-date').value;
+            const hour = document.getElementById('rem-hour').value;
+            const isLoop = document.getElementById('rem-is-loop').checked;
+            
+            // 수신자 목록 긁어오기
+            const chks = document.getElementsByName('reminder-recipients-chk');
+            const recipients = [];
+            chks.forEach(chk => {
+                if (chk.checked) recipients.push(chk.value);
+            });
+
+            if (recipients.length === 0) {
+                alert('발송 대상 수신자를 1명 이상 선택하셔야 합니다.');
+                return;
+            }
+
+            const editId = document.getElementById('edit-reminder-id').value;
+            const action = editId ? 'updateReminder' : 'addReminder';
+            
+            const payload = {
+                title, content, interval, hour, isLoop, recipients,
+                weeklyDay: (interval === 'weekly' || interval === 'biweekly') ? Number(weeklyDay) : '',
+                customDate: interval === 'custom' ? customDate : ''
+            };
+
+            if (editId) payload.id = editId;
+
+            setNavStatus('저장 중...');
+            const res = await callRawApi(action, payload);
+            
+            if (res && res.status === 'ok') {
+                alert(editId ? '리마인더가 성공적으로 수정되었습니다.' : '리마인더가 정상 등록되었습니다.');
+                resetForm();
+                await loadData();
+            } else {
+                alert('저장 실패: ' + (res ? res.message : '통신 오류'));
+                setNavStatus('동기화 상태 정상');
+            }
+        });
+
+        // 리마인더 수정 모드 로드
+        function editReminder(id) {
+            const r = appData.activeReminders.find(item => item.id === id);
+            if (!r) return;
+
+            document.getElementById('edit-reminder-id').value = r.id;
+            document.getElementById('rem-title').value = r.title;
+            document.getElementById('rem-content').value = r.content;
+            document.getElementById('rem-interval').value = r.interval;
+            handleIntervalChange(); // 조건부 필드 동적 렌더링
+
+            if (r.interval === 'weekly' || r.interval === 'biweekly') {
+                document.getElementById('rem-weekly-day').value = r.weeklyDay;
+            } else if (r.interval === 'custom') {
+                document.getElementById('rem-custom-date').value = r.customDate;
+            }
+
+            document.getElementById('rem-hour').value = r.hour;
+            document.getElementById('rem-is-loop').checked = r.isLoop;
+
+            // 체크 박스 바인딩
+            toggleAllRecipients(false); // 전체 취소
+            const chks = document.getElementsByName('reminder-recipients-chk');
+            chks.forEach(chk => {
+                if (r.recipients.includes(chk.value)) {
+                    chk.checked = true;
+                }
+            });
+
+            // 폼 카드 헤더/버튼 변경
+            document.getElementById('form-card-title').innerHTML = '<i class="fa-solid fa-calendar-check" style="color:var(--sys-blue);"></i> 리마인더 수정 중';
+            document.getElementById('btn-submit-reminder').innerHTML = '<i class="fa-solid fa-check"></i> 변경사항 업데이트';
+            document.getElementById('btn-cancel-edit').style.display = 'inline-flex';
+            
+            // 폼 상단으로 부드럽게 스크롤
+            document.getElementById('reminder-form').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 수정 취소
+        document.getElementById('btn-cancel-edit').addEventListener('click', resetForm);
+
+        function resetForm() {
+            document.getElementById('edit-reminder-id').value = '';
+            document.getElementById('reminder-form').reset();
+            handleIntervalChange();
+            toggleAllRecipients(false);
+            
+            document.getElementById('form-card-title').innerHTML = '<i class="fa-solid fa-calendar-plus"></i> 새 리마인더 등록';
+            document.getElementById('btn-submit-reminder').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 리마인더 저장';
+            document.getElementById('btn-cancel-edit').style.display = 'none';
+        }
+
+        // 리마인더 수동 삭제
+        async function deleteReminder(id) {
+            if (!confirm('해당 리마인더를 정말 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+
+            setNavStatus('삭제 중...');
+            const res = await callRawApi('deleteReminder', { id: id });
+            
+            if (res && res.status === 'ok') {
+                await loadData();
+            } else {
+                alert('삭제 실패: ' + (res ? res.message : '통신 오류'));
+                setNavStatus('정상');
+            }
+        }
+
+        // 강제 종료 / 재활성화 토글
+        async function toggleSuspend(id) {
+            setNavStatus('상태 변경 중...');
+            const res = await callRawApi('toggleSuspendReminder', { id: id });
+            
+            if (res && res.status === 'ok') {
+                await loadData();
+            } else {
+                alert('상태 변경 실패: ' + (res ? res.message : '통신 오류'));
+                setNavStatus('정상');
+            }
+        }
+
+        // 수신자 모달 열기/닫기
+        document.getElementById('btn-open-recipients').addEventListener('click', () => {
+            document.getElementById('recipients-modal').style.display = 'flex';
+            
+            // 모달 비밀번호 필드에 기본 로그인 패스워드 주입해둠 (연속 작업을 돕기 위함)
+            const masterPwd = localStorage.getItem('automail_master_password') || '';
+            document.getElementById('modal-action-password').value = masterPwd;
+            
+            renderRecipientTable();
+        });
+
+        function closeRecipientsModal() {
+            document.getElementById('recipients-modal').style.display = 'none';
+        }
+
+        // 수신자 수동 개별 추가
+        async function addSingleRecipient() {
+            const name = document.getElementById('manual-name').value.trim();
+            const email = document.getElementById('manual-email').value.trim();
+            const memo = document.getElementById('manual-memo').value.trim();
+            
+            const pwd = document.getElementById('modal-action-password').value.trim();
+            if (!pwd) {
+                alert('수신자 추가 작업을 진행하기 전에 모달 상단에 관리자 비밀번호를 먼저 입력하세요.');
+                return;
+            }
+
+            if (!name || !email) {
+                alert('성함과 이메일 주소를 입력해 주십시오.');
+                return;
+            }
+
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                alert('올바른 이메일 주소 형식이 아닙니다.');
+                return;
+            }
+
+            setNavStatus('수신자 추가 중...');
+            const res = await callRawApi('addRecipientsBulk', {
+                recipients: [{ name, email, memo }]
+            });
+
+            if (res && res.status === 'ok') {
+                document.getElementById('manual-name').value = '';
+                document.getElementById('manual-email').value = '';
+                document.getElementById('manual-memo').value = '';
+                
+                await loadData();
+                alert('수신자가 등록되었습니다.');
+            } else {
+                alert('수신자 추가 실패: ' + (res ? res.message : '비밀번호 또는 통신 오류'));
+                setNavStatus('정상');
+            }
+        }
+
+        // Excel (.xlsx) 파일 업로드 및 파싱 처리
+        function handleXlsxUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const pwd = document.getElementById('modal-action-password').value.trim();
+            if (!pwd) {
+                alert('엑셀 대량 업로드를 실행하기 위해 모달 상단에 비밀번호를 반드시 입력하세요.');
+                // 파일 인풋 클리어
+                document.getElementById('xlsx-input').value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    
+                    // JSON 형태로 변환 (헤더는 row 1번 기준)
+                    // Excel 파일 형식: A1 성함, B1 이메일주소, C1 비고(현장명)
+                    // [{ "성함": "홍길동", "이메일주소": "...", "비고": "..." }]
+                    // key를 임의의 값으로 지정할 수 있는 XLSX.utils.sheet_to_json 옵션을 씁니다.
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    const recipientsList = [];
+                    // index 0 은 헤더 ('성함', '이메일주소', '비고' 등)이므로 1번째 행부터 순회
+                    for (let i = 1; i < rows.length; i++) {
+                        const row = rows[i];
+                        const name = String(row[0] || '').trim();
+                        const email = String(row[1] || '').trim();
+                        const memo = String(row[2] || '').trim();
+                        
+                        if (email) {
+                            recipientsList.push({ name, email, memo });
+                        }
+                    }
+
+                    if (recipientsList.length === 0) {
+                        alert('가져올 이메일 수신자 목록이 비어 있거나 올바르지 않습니다.');
+                        document.getElementById('xlsx-input').value = '';
+                        return;
+                    }
+
+                    if (confirm(`파싱된 ${recipientsList.length}건의 수신자를 일괄 등록하시겠습니까?\n기존에 등록된 동일 이메일의 수신자는 정보가 업데이트됩니다.`)) {
+                        setNavStatus('수신자 대량 업로드 중...');
+                        const res = await callRawApi('addRecipientsBulk', {
+                            recipients: recipientsList
+                        });
+
+                        if (res && res.status === 'ok') {
+                            alert(`${recipientsList.length}건의 수신자가 정상 등록되었습니다.`);
+                            document.getElementById('xlsx-input').value = '';
+                            await loadData();
+                        } else {
+                            alert('대량 업로드 실패: ' + (res ? res.message : '비밀번호 검증 또는 서버 통신 실패'));
+                            setNavStatus('정상');
+                        }
+                    } else {
+                        document.getElementById('xlsx-input').value = '';
+                    }
+
+                } catch (error) {
+                    alert('엑셀 파일 파싱 오류: ' + error.toString());
+                    document.getElementById('xlsx-input').value = '';
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 수신자 선택 대량 삭제
+        async function deleteSelectedRecipients() {
+            const pwd = document.getElementById('modal-action-password').value.trim();
+            if (!pwd) {
+                alert('수신자 삭제 작업을 진행하기 위해 모달 상단에 관리자 비밀번호를 필히 입력해 주십시오.');
+                return;
+            }
+
+            const chks = document.querySelectorAll('.recipient-row-chk:checked');
+            const emailsToDelete = Array.from(chks).map(chk => chk.value);
+
+            if (emailsToDelete.length === 0) {
+                alert('삭제할 수신자를 체크박스로 먼저 선택하세요.');
+                return;
+            }
+
+            if (!confirm(`선택한 ${emailsToDelete.length}명의 수신자를 일괄 삭제하시겠습니까?\n이 이메일들은 발송 대상에서 전부 제외됩니다.`)) {
+                return;
+            }
+
+            setNavStatus('수신자 삭제 중...');
+            const res = await callRawApi('deleteRecipientsBulk', {
+                emails: emailsToDelete
+            });
+
+            if (res && res.status === 'ok') {
+                alert('성공적으로 삭제되었습니다.');
+                await loadData();
+            } else {
+                alert('삭제 실패: ' + (res ? res.message : '비밀번호 불일치 또는 통신 오류'));
+                setNavStatus('정상');
+            }
+        }
+
+        // 수동 배치 테스트 실행
+        async function triggerManualRun() {
+            if (!confirm('즉시 리마인드 배치를 실행합시겠습니까?\n주기가 오늘 날짜/시각 조건에 만족하는 리마인더들의 자동 메일 발송이 진행됩니다.')) return;
+            
+            setNavStatus('배치 수동 실행 중...');
+            const res = await callRawApi('runTriggerManual');
+            
+            if (res && res.status === 'ok') {
+                alert(res.message);
+                await loadData();
+            } else {
+                alert('배치 실행 에러: ' + (res ? res.message : '네트워크 통신 오류'));
+                setNavStatus('정상');
+            }
+        }
+
+        // 매시간 돌 트리거 재설치
+        async function installTrigger() {
+            if (!confirm('매시간 자동으로 돌 시간 트리거를 구글 서버에 새로 설정하시겠습니까?')) return;
+            
+            setNavStatus('트리거 설치 중...');
+            const res = await callRawApi('installTrigger');
+            
+            if (res && res.status === 'ok') {
+                alert(res.message);
+                setNavStatus('트리거 설치 완료');
+            } else {
+                alert('트리거 설치 실패: ' + (res ? res.message : '네트워크 통신 오류'));
+                setNavStatus('정상');
+            }
+        }
+
+        // HTML 문자열 이스케이프 헬퍼
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
