@@ -1124,20 +1124,20 @@
                 document.getElementById('btn-login').disabled = true;
                 document.getElementById('btn-login').textContent = '인증 확인 중...';
                 
-                const ok = await loadData();
+                const result = await loadData();
                 
                 document.getElementById('btn-login').disabled = false;
                 document.getElementById('btn-login').innerHTML = '시스템 접속 <i class="fa-solid fa-chevron-right"></i>';
 
-                if (ok) {
+                if (result.ok) {
                     document.getElementById('login-overlay').style.display = 'none';
                 } else {
-                    if (appData.isFirstSetup) {
+                    if (result.status === 'first_setup_needed' || appData.isFirstSetup) {
                         errEl.textContent = '구글 서버에 저장된 비밀번호가 없습니다. 방금 입력하신 패스워드로 비밀번호 등록을 진행합니다.';
                     } else {
                         localStorage.removeItem('automail_master_password');
                         document.getElementById('modal-action-password').value = '';
-                        errEl.textContent = '비밀번호가 틀렸습니다. 다시 확인해 주세요.';
+                        errEl.textContent = '접속 실패: ' + result.message;
                     }
                 }
             }
@@ -1175,17 +1175,19 @@
             };
 
             try {
-                // CORS 프리플라이트 차단을 예방하기 위해 Content-Type 헤더를 명시하지 않고 원시 body로 전송합니다.
+                // CORS 프리플라이트 차단을 예방하고 OPTIONS 요청을 피하기 위해 
+                // Content-Type 헤더를 text/plain으로 강제하여 Simple Request 규격으로 전송합니다.
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
+                    headers: {
+                        'Content-Type': 'text/plain'
+                    },
                     body: JSON.stringify(bodyObj)
                 });
                 return await response.json();
             } catch (e) {
                 console.error("API Call failed: ", e);
-                // 네트워크 에러 등이 났을 때, GAS 특유의 CORS 리디렉션 응답을 고려하여
-                // status가 JSON에 담기지 않는 경우가 있을 수 있습니다.
-                return { status: "network_error", message: e.toString() };
+                return { status: "network_error", message: e.toString() + " (웹앱 배포 및 권한 설정을 확인하세요)" };
             }
         }
 
@@ -1208,18 +1210,18 @@
                 renderReminderList();
                 
                 setNavStatus(`동기화 완료: ${res.lastSync}`);
-                return true;
+                return { ok: true };
             } else if (res && res.status === 'auth_error') {
                 setNavStatus('인증 실패');
-                return false;
+                return { ok: false, status: 'auth_error', message: res.message || '비밀번호가 올바르지 않습니다.' };
             } else if (res && res.status === 'first_setup_needed') {
                 setNavStatus('초기 설정 필요');
                 appData.isFirstSetup = true;
                 showFirstSetupScreen();
-                return false;
+                return { ok: false, status: 'first_setup_needed', message: res.message };
             } else {
                 setNavStatus('네트워크 연결 끊김');
-                return false;
+                return { ok: false, status: 'network_error', message: res ? res.message : '서버 통신 실패' };
             }
         }
 
