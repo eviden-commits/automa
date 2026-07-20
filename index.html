@@ -1132,9 +1132,13 @@
                 if (ok) {
                     document.getElementById('login-overlay').style.display = 'none';
                 } else {
-                    localStorage.removeItem('automail_master_password');
-                    document.getElementById('modal-action-password').value = '';
-                    errEl.textContent = '비밀번호가 틀렸습니다. 다시 확인해 주세요.';
+                    if (appData.isFirstSetup) {
+                        errEl.textContent = '구글 서버에 저장된 비밀번호가 없습니다. 방금 입력하신 패스워드로 비밀번호 등록을 진행합니다.';
+                    } else {
+                        localStorage.removeItem('automail_master_password');
+                        document.getElementById('modal-action-password').value = '';
+                        errEl.textContent = '비밀번호가 틀렸습니다. 다시 확인해 주세요.';
+                    }
                 }
             }
         });
@@ -1207,6 +1211,11 @@
                 return true;
             } else if (res && res.status === 'auth_error') {
                 setNavStatus('인증 실패');
+                return false;
+            } else if (res && res.status === 'first_setup_needed') {
+                setNavStatus('초기 설정 필요');
+                appData.isFirstSetup = true;
+                showFirstSetupScreen();
                 return false;
             } else {
                 setNavStatus('네트워크 연결 끊김');
