@@ -1375,7 +1375,9 @@
                     <div class="reminder-card-header">
                         <span class="status-badge ${badgeClass}">${badgeLabel}</span>
                         <div class="reminder-card-title">${escapeHtml(r.title)}</div>
-                        <div style="font-size: 11px; font-weight: 500; font-family: var(--font-mono); color:var(--sys-label-4); margin-left:auto;">${r.hour}시 발송</div>
+                        <span class="status-badge" style="background:var(--sys-blue-bg); color:var(--sys-blue); margin-left:auto; font-weight:700; font-size:11.5px; padding:3px 8px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">
+                            <i class="fa-solid fa-clock"></i> ${r.hour}시 발송
+                        </span>
                     </div>
                     <div class="reminder-card-body">${escapeHtml(r.content || '(본문 내용 없음)')}</div>
                     
@@ -1387,8 +1389,9 @@
 
                     <div class="reminder-card-meta">
                         <div><i class="fa-solid fa-arrows-spin"></i> 주기: <span style="font-weight:600; color:var(--sys-label);">${intervalDetail}</span></div>
+                        <div><i class="fa-solid fa-clock"></i> 발송 시각: <span style="font-weight:700; color:var(--sys-blue);">${r.hour}시 (KST)</span></div>
                         <div><i class="fa-solid fa-repeat"></i> 반복: <span class="meta-tag ${r.isLoop ? 'loop' : 'single'}">${r.isLoop ? '반복 발송' : '1회성 발송'}</span></div>
-                        ${r.lastSentAt ? `<div><i class="fa-solid fa-clock"></i> 최근 발송: <span>${r.lastSentAt}</span></div>` : ''}
+                        ${r.lastSentAt ? `<div><i class="fa-solid fa-circle-check"></i> 최근 발송: <span>${r.lastSentAt}</span></div>` : ''}
                     </div>
 
                     <div class="reminder-actions">
